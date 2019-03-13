@@ -4,6 +4,10 @@ import Array exposing (Array)
 import Browser
 import Html exposing (Html)
 import Html.Attributes as Attr
+import Http
+import Json.Encode as Encode
+import Model exposing (..)
+import Ports exposing (..)
 import String exposing (fromInt)
 import Svg exposing (..)
 import Svg.Attributes exposing (..)
@@ -19,54 +23,8 @@ main =
         }
 
 
-
--- MODEL
-
-
-type Player
-    = Red
-    | Blue
-    | Empty
-
-
-type alias Grid =
-    List (List Player)
-
-
-type alias GridArray =
-    Array (Array Player)
-
-
-type alias Pos =
-    { x : Int
-    , y : Int
-    }
-
-
-type NextMove
-    = Any
-    | Place Pos
-
-
-type alias Model =
-    { grid : Grid
-    , bigGrid : Grid
-    , currentPlayer : Player
-    , nextMove : NextMove
-    , winner : Player
-    }
-
-
-initialGrid : Int -> Grid
-initialGrid size =
-    List.map
-        (always <| List.map (always Empty) <| List.repeat size 0)
-    <|
-        List.repeat size 0
-
-
-init : () -> ( Model, Cmd Msg )
-init _ =
+init : String -> ( Model, Cmd Msg )
+init firebaseUrl =
     ( { nextMove = Any
       , grid =
             initialGrid 9
@@ -74,6 +32,9 @@ init _ =
             initialGrid 3
       , currentPlayer = Red
       , winner = Empty
+      , settings =
+            { firebaseUrl = firebaseUrl
+            }
       }
     , Cmd.none
     )
@@ -85,6 +46,7 @@ init _ =
 
 type Msg
     = MakeMove Pos
+    | MakeMoveRequest Pos
     | NoOp
 
 
@@ -92,15 +54,15 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         MakeMove pos ->
-            ( if model.winner == Empty && isValidMove model.nextMove pos then
-                let
+            if model.winner == Empty && isValidMove model.nextMove pos then
+                ( let
                     nextGrid =
                         setPos model.grid pos model.currentPlayer
 
                     nextBigGrid =
                         checkForWins nextGrid model.bigGrid model.currentPlayer
-                in
-                { model
+                  in
+                  { model
                     | grid = nextGrid
                     , nextMove =
                         let
@@ -129,15 +91,56 @@ update msg model =
                                 Red
                     , bigGrid = nextBigGrid
                     , winner = checkWinSimple (toGridArray nextBigGrid)
-                }
+                  }
+                , Cmd.none
+                )
+
+            else
+                ( model, Cmd.none )
+
+        MakeMoveRequest pos ->
+            ( model
+            , if model.winner == Empty && isValidMove model.nextMove pos then
+                addMoveRequest model.settings.firebaseUrl pos model.currentPlayer
 
               else
-                model
-            , Cmd.none
+                Cmd.none
             )
 
         NoOp ->
             ( model, Cmd.none )
+
+
+addMoveRequest : String -> Pos -> Player -> Cmd Msg
+addMoveRequest url pos player =
+    Http.post
+        { url = url
+        , body =
+            ( pos, player )
+                |> moveEncoder
+                |> Http.jsonBody
+        , expect = Http.expectWhatever <| always NoOp
+        }
+
+
+moveEncoder : ( Pos, Player ) -> Encode.Value
+moveEncoder ( pos, player ) =
+    Encode.object
+        [ ( "pos", Encode.string <| fromInt pos.x ++ " " ++ fromInt pos.y )
+        , ( "player"
+          , Encode.string
+                (case player of
+                    Red ->
+                        "Red"
+
+                    Blue ->
+                        "Blue"
+
+                    Empty ->
+                        "Empty"
+                )
+          )
+        ]
 
 
 isValidMove : NextMove -> Pos -> Bool
@@ -283,11 +286,15 @@ setPos grid pos player =
 
 
 -- SUBSCRIPTIONS
+{- JS side code to listen to firbase updates:
+   let source = new EventSource('https://main-fe047.firebaseio.com/ultimatettt.json');
+   source.addEventListener('put', console.log);
+-}
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.none
+    addedMove (\( pos, player ) -> MakeMove pos)
 
 
 
@@ -502,7 +509,7 @@ viewGrid model =
                             , height <| fromInt squareSize
                             , stroke "none"
                             , fill "transparent"
-                            , onClick <| MakeMove pos
+                            , onClick <| MakeMoveRequest pos
                             ]
                             []
                         ]
