@@ -2,6 +2,9 @@ module Main exposing (main)
 
 import Browser
 import Html exposing (..)
+import Html.Attributes as Attr
+import Html.Events exposing (onClick, onInput)
+import String exposing (fromInt)
 
 
 
@@ -25,13 +28,41 @@ type alias Player =
     String
 
 
+type State
+    = Home
+    | EnterPlayerName
+    | MainGame
+
+
+type alias Score =
+    { tricks : Int
+    , made : Int
+    , score : Int
+    }
+
+
+type alias ScoreBoard =
+    List
+        { player : Player
+        , score : Score
+        }
+
+
 type alias Model =
-    { text : String }
+    { state : State
+    , players : List Player
+    , text : String
+    }
 
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( Model "hello", Cmd.none )
+    ( { state = EnterPlayerName
+      , players = [ "", "", "", "" ]
+      , text = ""
+      }
+    , Cmd.none
+    )
 
 
 
@@ -39,15 +70,49 @@ init _ =
 
 
 type Msg
-    = SetText String
+    = ChangeState State
+    | UpdatePlayer Int Player
+    | RemoveEmptyPlayers
+    | Batch (List Msg)
     | NoOp
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        SetText text ->
-            ( { model | text = text }, Cmd.none )
+        ChangeState state ->
+            ( { model | state = state }, Cmd.none )
+
+        UpdatePlayer index newPlayer ->
+            ( { model
+                | players =
+                    List.indexedMap
+                        (\i p ->
+                            if i == index then
+                                newPlayer
+
+                            else
+                                p
+                        )
+                        model.players
+              }
+            , Cmd.none
+            )
+
+        RemoveEmptyPlayers ->
+            ( { model | players = List.filter (String.length >> (<) 0) model.players }, Cmd.none )
+
+        Batch msgs ->
+            List.foldl
+                (\curMsg ( curModel, prevCommand ) ->
+                    let
+                        ( updatedModel, newCommand ) =
+                            update curMsg curModel
+                    in
+                    ( updatedModel, Cmd.batch [ prevCommand, newCommand ] )
+                )
+                ( model, Cmd.none )
+                msgs
 
         NoOp ->
             ( model, Cmd.none )
@@ -68,4 +133,43 @@ subscriptions model =
 
 view : Model -> Html Msg
 view model =
-    p [] [ text model.text ]
+    case model.state of
+        Home ->
+            viewHome model
+
+        EnterPlayerName ->
+            viewEnterPlayerName model
+
+        MainGame ->
+            viewMainGame model
+
+
+viewHome : Model -> Html Msg
+viewHome model =
+    div []
+        [ button [ onClick (ChangeState EnterPlayerName) ] [ text "Begin" ]
+        ]
+
+
+viewEnterPlayerName : Model -> Html Msg
+viewEnterPlayerName model =
+    div [] <|
+        List.indexedMap
+            (\i p ->
+                div []
+                    [ label [] [ text <| "Player " ++ fromInt i ]
+                    , input [ onInput <| UpdatePlayer i ] []
+                    , span [] [ text p ]
+                    ]
+            )
+            model.players
+            ++ [ div []
+                    [ button [ onClick <| ChangeState Home ] [ text "Back" ]
+                    , button [ onClick <| Batch [ RemoveEmptyPlayers, ChangeState MainGame ] ] [ text "Next" ]
+                    ]
+               ]
+
+
+viewMainGame : Model -> Html Msg
+viewMainGame model =
+    div [] [ text "main game" ]
