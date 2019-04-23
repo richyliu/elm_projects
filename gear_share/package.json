@@ -1,0 +1,22 @@
+{
+  "name": "gear_share",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "parcel watch ./src/index.html --no-hmr & live-server --no-browser --port=8000 ./dist/",
+    "build": "rm -r ./dist/; parcel build --no-minify ./src/index.html",
+    "prod": "rm -r ./dist/; parcel build --no-source-maps ./src/index.html",
+    "local-server": "http-server ./dist/ -o -p 8000"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "live-server": "^1.2.1",
+    "parcel": "^1.12.3"
+  },
+  "devDependencies": {
+    "node-elm-compiler": "^5.0.3"
+  }
+}
