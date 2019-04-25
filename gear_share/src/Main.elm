@@ -1,88 +1,116 @@
 module Main exposing (main)
 
 import Browser
-import Html exposing (..)
-import Html.Attributes as Attr
-import Html.Events exposing (onClick, onInput)
-import String exposing (fromInt)
-
-
-
--- main
+import Browser.Navigation as Nav
+import Html
+import Pages.Home as Home
+import Url
 
 
 main =
-    Browser.element
+    Browser.application
         { init = init
         , update = update
         , subscriptions = subscriptions
         , view = view
+        , onUrlRequest = LinkClicked
+        , onUrlChange = UrlChanged
         }
 
 
 
--- model
+-- MODEL
 
 
-type alias Item =
-    { image : String
-    , title : String
-    }
+type Page
+    = Home Home.Model
 
 
 type alias Model =
-    { items : List Item }
+    { page : Page
+    , key : Nav.Key
+    , url : Url.Url
+    }
 
 
-init : () -> ( Model, Cmd Msg )
-init _ =
-    ( { items =
-            [ Item "http://via.placeholder.com/200x200" "hi"
-            , Item "http://via.placeholder.com/200x200" "another item"
-            ]
+init : String -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
+init flags url key =
+    let
+        ( pageModel, pageCmd ) =
+            Home.init flags
+    in
+    ( { page = Home pageModel
+      , key = key
+      , url = url
       }
-    , Cmd.none
+    , Cmd.map GotHomeMsg pageCmd
     )
 
 
 
--- update
+-- UPDATE
 
 
 type Msg
-    = NoOp
+    = LinkClicked Browser.UrlRequest
+    | UrlChanged Url.Url
+    | GotHomeMsg Home.Msg
+    | NoOp
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
-        NoOp ->
+    case ( msg, model.page ) of
+        ( LinkClicked urlRequest, _ ) ->
+            case urlRequest of
+                Browser.Internal url ->
+                    -- ( model, Nav.pushUrl model.key (Url.toString url) )
+                    ( model, Nav.load <| Url.toString url )
+
+                Browser.External href ->
+                    ( model, Nav.load href )
+
+        ( UrlChanged url, _ ) ->
+            ( { model | url = url }
+            , Cmd.none
+            )
+
+        ( GotHomeMsg pageMsg, Home pageModel ) ->
+            let
+                ( resultModel, resultCmd ) =
+                    Home.update pageMsg pageModel
+            in
+            ( { model | page = Home resultModel }
+            , Cmd.map GotHomeMsg resultCmd
+            )
+
+        ( _, _ ) ->
             ( model, Cmd.none )
 
 
 
--- subscriptions
+-- SUBSCRIPTIONS
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.none
+    case model.page of
+        Home pageModel ->
+            Sub.map GotHomeMsg <| Home.subscriptions pageModel
 
 
 
--- view
+-- VIEW
 
 
-view : Model -> Html Msg
+view : Model -> Browser.Document Msg
 view model =
-    div [] <|
-        [ h1 [] [ text "Items list" ]
-        ]
-            ++ List.map
-                (\item ->
-                    div []
-                        [ h2 [] [ text item.title ]
-                        , img [ Attr.src item.image ] []
-                        ]
-                )
-                model.items
+    case model.page of
+        Home m ->
+            let
+                rendered =
+                    Home.view m
+            in
+            { title = rendered.title
+            , body = List.map (Html.map GotHomeMsg) rendered.body
+            }
