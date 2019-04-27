@@ -1,116 +1,206 @@
-module Main exposing (main)
+module Main exposing (init, main, subscriptions)
 
-import Browser
-import Browser.Navigation as Nav
-import Html
-import Pages.Home as Home
-import Url
-
-
-main =
-    Browser.application
-        { init = init
-        , update = update
-        , subscriptions = subscriptions
-        , view = view
-        , onUrlRequest = LinkClicked
-        , onUrlChange = UrlChanged
-        }
-
-
-
--- MODEL
-
-
-type Page
-    = Home Home.Model
+import Browser exposing (UrlRequest)
+import Browser.Navigation as Nav exposing (Key)
+import Html exposing (Html, a, div, section, text)
+import Html.Attributes exposing (class, href)
+import Pages.Edit as Edit
+import Pages.List as List
+import Routes exposing (Route)
+import Shared exposing (..)
+import Url exposing (Url)
 
 
 type alias Model =
-    { page : Page
-    , key : Nav.Key
-    , url : Url.Url
+    { flags : Flags
+    , navKey : Key
+    , route : Route
+    , page : Page
     }
 
 
-init : String -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
-init flags url key =
-    let
-        ( pageModel, pageCmd ) =
-            Home.init flags
-    in
-    ( { page = Home pageModel
-      , key = key
-      , url = url
-      }
-    , Cmd.map GotHomeMsg pageCmd
-    )
-
-
-
--- UPDATE
+type Page
+    = PageNone
+    | PageList List.Model
+    | PageEdit Edit.Model
 
 
 type Msg
-    = LinkClicked Browser.UrlRequest
-    | UrlChanged Url.Url
-    | GotHomeMsg Home.Msg
-    | NoOp
+    = OnUrlChange Url
+    | OnUrlRequest UrlRequest
+    | ListMsg List.Msg
+    | EditMsg Edit.Msg
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
-    case ( msg, model.page ) of
-        ( LinkClicked urlRequest, _ ) ->
-            case urlRequest of
-                Browser.Internal url ->
-                    -- ( model, Nav.pushUrl model.key (Url.toString url) )
-                    ( model, Nav.load <| Url.toString url )
-
-                Browser.External href ->
-                    ( model, Nav.load href )
-
-        ( UrlChanged url, _ ) ->
-            ( { model | url = url }
-            , Cmd.none
-            )
-
-        ( GotHomeMsg pageMsg, Home pageModel ) ->
-            let
-                ( resultModel, resultCmd ) =
-                    Home.update pageMsg pageModel
-            in
-            ( { model | page = Home resultModel }
-            , Cmd.map GotHomeMsg resultCmd
-            )
-
-        ( _, _ ) ->
-            ( model, Cmd.none )
+init : Flags -> Url -> Key -> ( Model, Cmd Msg )
+init flags url navKey =
+    loadCurrentPage
+        ( { flags = flags
+          , navKey = navKey
+          , route = Routes.parseUrl url
+          , page = PageNone
+          }
+        , Cmd.none
+        )
 
 
+loadCurrentPage : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+loadCurrentPage ( model, cmd ) =
+    let
+        ( page, newCmd ) =
+            case model.route of
+                Routes.ItemsRoute ->
+                    let
+                        ( pageModel, pageCmd ) =
+                            List.init model.flags
+                    in
+                    ( PageList pageModel, Cmd.map ListMsg pageCmd )
 
--- SUBSCRIPTIONS
+                Routes.ItemRoute itemId ->
+                    let
+                        ( pageModel, pageCmd ) =
+                            Edit.init model.flags itemId
+                    in
+                    ( PageEdit pageModel, Cmd.map EditMsg pageCmd )
+
+                Routes.NotFoundRoute ->
+                    ( PageNone, Cmd.none )
+    in
+    ( { model | page = page }, Cmd.batch [ cmd, newCmd ] )
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
     case model.page of
-        Home pageModel ->
-            Sub.map GotHomeMsg <| Home.subscriptions pageModel
+        PageList pageModel ->
+            Sub.map ListMsg (List.subscriptions pageModel)
+
+        PageEdit pageModel ->
+            Sub.map EditMsg (Edit.subscriptions pageModel)
+
+        PageNone ->
+            Sub.none
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+    case ( msg, model.page ) of
+        ( OnUrlRequest urlRequest, _ ) ->
+            case urlRequest of
+                Browser.Internal url ->
+                    ( model
+                    , Nav.pushUrl model.navKey (Url.toString url)
+                    )
+
+                Browser.External url ->
+                    ( model
+                    , Nav.load url
+                    )
+
+        ( OnUrlChange url, _ ) ->
+            let
+                newRoute =
+                    Routes.parseUrl url
+            in
+            ( { model | route = newRoute }, Cmd.none )
+                |> loadCurrentPage
+
+        ( ListMsg subMsg, PageList pageModel ) ->
+            let
+                ( newPageModel, newCmd ) =
+                    List.update subMsg pageModel
+            in
+            ( { model | page = PageList newPageModel }
+            , Cmd.map ListMsg newCmd
+            )
+
+        ( ListMsg subMsg, _ ) ->
+            ( model, Cmd.none )
+
+        ( EditMsg subMsg, PageEdit pageModel ) ->
+            let
+                ( newPageModel, newCmd ) =
+                    Edit.update model.flags subMsg pageModel
+            in
+            ( { model | page = PageEdit newPageModel }
+            , Cmd.map EditMsg newCmd
+            )
+
+        ( EditMsg subMsg, _ ) ->
+            ( model, Cmd.none )
+
+
+main : Program Flags Model Msg
+main =
+    Browser.application
+        { init = init
+        , view = view
+        , update = update
+        , subscriptions = subscriptions
+        , onUrlRequest = OnUrlRequest
+        , onUrlChange = OnUrlChange
+        }
 
 
 
--- VIEW
+-- VIEWS
 
 
 view : Model -> Browser.Document Msg
 view model =
-    case model.page of
-        Home m ->
-            let
-                rendered =
-                    Home.view m
-            in
-            { title = rendered.title
-            , body = List.map (Html.map GotHomeMsg) rendered.body
-            }
+    { title = "Gear share"
+    , body = [ currentPage model ]
+    }
+
+
+currentPage : Model -> Html Msg
+currentPage model =
+    let
+        page =
+            case model.page of
+                PageList pageModel ->
+                    List.view pageModel
+                        |> Html.map ListMsg
+
+                PageEdit pageModel ->
+                    Edit.view pageModel
+                        |> Html.map EditMsg
+
+                PageNone ->
+                    notFoundView
+    in
+    section []
+        [ nav model
+        , page
+        ]
+
+
+nav : Model -> Html Msg
+nav model =
+    let
+        links =
+            case model.route of
+                Routes.ItemsRoute ->
+                    [ text "Items" ]
+
+                Routes.ItemRoute _ ->
+                    [ linkToList
+                    ]
+
+                Routes.NotFoundRoute ->
+                    [ linkToList
+                    ]
+
+        linkToList =
+            a [ href Routes.itemsPath, class "text-white" ] [ text "List" ]
+    in
+    div
+        [ class "mb-2 text-white bg-black p-4" ]
+        links
+
+
+notFoundView : Html msg
+notFoundView =
+    div []
+        [ text "Not found"
+        ]
