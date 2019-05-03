@@ -1,4 +1,4 @@
-module Routes exposing (Route(..), itemPath, itemsPath, parseUrl)
+module Routes exposing (Route(..), addPath, itemPath, itemsPath, parseUrl)
 
 import Url exposing (Url)
 import Url.Parser exposing (..)
@@ -7,6 +7,7 @@ import Url.Parser exposing (..)
 type Route
     = ItemsRoute
     | ItemRoute String
+    | AddRoute
     | NotFoundRoute
 
 
@@ -16,6 +17,7 @@ matchers =
         [ map ItemsRoute top
         , map ItemRoute (s "items" </> string)
         , map ItemsRoute (s "items")
+        , map AddRoute (s "add")
         ]
 
 
@@ -38,13 +40,23 @@ pathFor route =
         ItemRoute id ->
             "/items/" ++ id
 
+        AddRoute ->
+            "/add"
+
         NotFoundRoute ->
             "/"
 
 
+itemsPath : String
 itemsPath =
     pathFor ItemsRoute
 
 
+itemPath : String -> String
 itemPath id =
     pathFor (ItemRoute id)
+
+
+addPath : String
+addPath =
+    pathFor AddRoute

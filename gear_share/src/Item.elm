@@ -1,4 +1,4 @@
-module Item exposing (Item, decoder, encode)
+module Item exposing (Item, ItemNoId, decoder, encode, encodeNoId)
 
 import Http
 import Json.Decode as Decode
@@ -9,6 +9,13 @@ import Shared exposing (..)
 type alias Item =
     { id : String
     , name : String
+    , img : String
+    , description : String
+    }
+
+
+type alias ItemNoId =
+    { name : String
     , img : String
     , description : String
     }
@@ -32,6 +39,15 @@ encode item =
     Encode.object
         [ ( "id", Encode.string item.id )
         , ( "name", Encode.string item.name )
+        , ( "img", Encode.string item.img )
+        , ( "description", Encode.string item.description )
+        ]
+
+
+encodeNoId : ItemNoId -> Encode.Value
+encodeNoId item =
+    Encode.object
+        [ ( "name", Encode.string item.name )
         , ( "img", Encode.string item.img )
         , ( "description", Encode.string item.description )
         ]

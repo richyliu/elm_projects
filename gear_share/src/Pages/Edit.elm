@@ -122,7 +122,7 @@ inputDescription item =
         [ class "flex items-end py-2" ]
         [ label [ class "mr-3" ] [ text "Level" ]
         , div [ class "" ]
-            [ span [ class "bold text-2xl" ] [ text "Description" ]
+            [ h3 [ class "bold text-2xl" ] [ text "Description" ]
             , textarea [] [ text item.description ]
             ]
         ]

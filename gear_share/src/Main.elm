@@ -2,8 +2,9 @@ module Main exposing (init, main, subscriptions)
 
 import Browser exposing (UrlRequest)
 import Browser.Navigation as Nav exposing (Key)
-import Html exposing (Html, a, div, section, text)
+import Html exposing (Html, a, div, section, span, text)
 import Html.Attributes exposing (class, href)
+import Pages.Add as Add
 import Pages.Edit as Edit
 import Pages.List as List
 import Routes exposing (Route)
@@ -23,6 +24,7 @@ type Page
     = PageNone
     | PageList List.Model
     | PageEdit Edit.Model
+    | PageAdd Add.Model
 
 
 type Msg
@@ -30,6 +32,7 @@ type Msg
     | OnUrlRequest UrlRequest
     | ListMsg List.Msg
     | EditMsg Edit.Msg
+    | AddMsg Add.Msg
 
 
 init : Flags -> Url -> Key -> ( Model, Cmd Msg )
@@ -63,6 +66,13 @@ loadCurrentPage ( model, cmd ) =
                     in
                     ( PageEdit pageModel, Cmd.map EditMsg pageCmd )
 
+                Routes.AddRoute ->
+                    let
+                        ( pageModel, pageCmd ) =
+                            Add.init model.flags
+                    in
+                    ( PageAdd pageModel, Cmd.map AddMsg pageCmd )
+
                 Routes.NotFoundRoute ->
                     ( PageNone, Cmd.none )
     in
@@ -77,6 +87,9 @@ subscriptions model =
 
         PageEdit pageModel ->
             Sub.map EditMsg (Edit.subscriptions pageModel)
+
+        PageAdd pageModel ->
+            Sub.map AddMsg (Add.subscriptions pageModel)
 
         PageNone ->
             Sub.none
@@ -129,6 +142,18 @@ update msg model =
         ( EditMsg subMsg, _ ) ->
             ( model, Cmd.none )
 
+        ( AddMsg subMsg, PageAdd pageModel ) ->
+            let
+                ( newPageModel, newCmd ) =
+                    Add.update model.flags subMsg pageModel
+            in
+            ( { model | page = PageAdd newPageModel }
+            , Cmd.map AddMsg newCmd
+            )
+
+        ( AddMsg subMsg, _ ) ->
+            ( model, Cmd.none )
+
 
 main : Program Flags Model Msg
 main =
@@ -166,41 +191,50 @@ currentPage model =
                     Edit.view pageModel
                         |> Html.map EditMsg
 
+                PageAdd pageModel ->
+                    Add.view pageModel
+                        |> Html.map AddMsg
+
                 PageNone ->
-                    notFoundView
+                    viewNotFound
     in
     section []
-        [ nav model
+        [ viewNav model
         , page
         ]
 
 
-nav : Model -> Html Msg
-nav model =
+viewNav : Model -> Html Msg
+viewNav model =
     let
+        links : List (Html Msg)
         links =
             case model.route of
                 Routes.ItemsRoute ->
-                    [ text "Items" ]
+                    [ span [ class "font-bold text-white m-2" ] [ text "Items" ], addLink ]
 
                 Routes.ItemRoute _ ->
-                    [ linkToList
-                    ]
+                    [ linkToList, addLink ]
+
+                Routes.AddRoute ->
+                    [ linkToList ]
 
                 Routes.NotFoundRoute ->
-                    [ linkToList
-                    ]
+                    [ linkToList, addLink ]
 
+        linkToList : Html Msg
         linkToList =
-            a [ href Routes.itemsPath, class "text-white" ] [ text "List" ]
+            a [ href Routes.itemsPath, class "text-white m-2" ] [ text "List" ]
+
+        addLink : Html Msg
+        addLink =
+            a [ href Routes.addPath, class "text-white m-2" ] [ text "Add" ]
     in
     div
         [ class "mb-2 text-white bg-black p-4" ]
         links
 
 
-notFoundView : Html msg
-notFoundView =
-    div []
-        [ text "Not found"
-        ]
+viewNotFound : Html Msg
+viewNotFound =
+    div [] [ text "Not found" ]
