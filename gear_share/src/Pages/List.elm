@@ -82,6 +82,7 @@ viewWithData items =
             [ tr []
                 [ th [ class "p-2" ] [ text "Img" ]
                 , th [ class "p-2" ] [ text "Name" ]
+                , th [ class "p-2" ] [ text "Owner" ]
                 , th [ class "p-2" ] [ text "Description" ]
                 , th [ class "p-2" ] [ text "Actions" ]
                 ]
@@ -93,8 +94,21 @@ viewWithData items =
 itemRow : Item -> Html Msg
 itemRow item =
     tr []
-        [ td [ class "p-2" ] [ img [ src item.img, Attr.width 100 ] [] ]
+        [ td [ class "p-2" ]
+            [ img
+                [ src
+                    (if item.img == "" then
+                        "https://via.placeholder.com/100x100.png?text=No%20Image"
+
+                     else
+                        item.img
+                    )
+                , Attr.width 100
+                ]
+                []
+            ]
         , td [ class "p-2" ] [ text item.name ]
+        , td [ class "p-2" ] [ text item.owner ]
         , td [ class "p-2" ] [ text item.description ]
         , td [ class "p-2" ]
             [ editBtn item ]

@@ -4,7 +4,7 @@ import Html exposing (..)
 import Html.Attributes as Attr exposing (class)
 import Html.Events exposing (onClick, onInput)
 import Http
-import Item exposing (Item, ItemNoId, encodeNoId)
+import Item exposing (Item, ItemNoId, blankItemNoId, encodeNoId)
 import Routes exposing (itemsPath)
 import Shared exposing (..)
 
@@ -19,6 +19,7 @@ type AddedState
 type alias Model =
     { item : ItemNoId
     , addedItem : AddedState
+    , errorFields : List String
     }
 
 
@@ -30,8 +31,9 @@ type Msg
 
 init : Flags -> ( Model, Cmd Msg )
 init flags =
-    ( { item = ItemNoId "" "" ""
+    ( { item = blankItemNoId
       , addedItem = Initial
+      , errorFields = []
       }
     , Cmd.none
     )
@@ -46,10 +48,24 @@ update : Flags -> Msg -> Model -> ( Model, Cmd Msg )
 update flags msg model =
     case msg of
         ChangeItem item ->
-            ( { model | item = item }, Cmd.none )
+            ( { model
+                | item = item
+                , errorFields =
+                    if List.length model.errorFields > 0 then
+                        getErrorFields model.item
+
+                    else
+                        []
+              }
+            , Cmd.none
+            )
 
         AddItem ->
-            ( model, addItem flags model.item )
+            if List.length (getErrorFields model.item) == 0 then
+                ( model, addItem flags model.item )
+
+            else
+                ( { model | errorFields = getErrorFields model.item }, Cmd.none )
 
         OnItemAdded itemResult ->
             ( { model
@@ -87,6 +103,29 @@ saveItemUrl flags =
     flags.api ++ "/items/"
 
 
+{-| Get the erroneous fields (fields that are blank)
+-}
+getErrorFields : ItemNoId -> List String
+getErrorFields item =
+    List.filter (String.length >> (/=) 0)
+        [ if String.length item.name == 0 then
+            "name"
+
+          else
+            ""
+        , if String.length item.owner == 0 then
+            "owner"
+
+          else
+            ""
+        , if String.length item.description == 0 then
+            "description"
+
+          else
+            ""
+        ]
+
+
 
 -- VIEWS
 
@@ -96,7 +135,7 @@ view model =
     section [ class "p-4" ]
         [ case model.addedItem of
             Success item ->
-                text "success"
+                viewSuccess model
 
             Error str ->
                 text <| "Error: " ++ str
@@ -105,12 +144,27 @@ view model =
                 text "Loading..."
 
             Initial ->
-                viewAddItem model.item
+                viewAddItem model.item model.errorFields
         ]
 
 
-viewAddItem : ItemNoId -> Html Msg
-viewAddItem item =
+viewAddItem : ItemNoId -> List String -> Html Msg
+viewAddItem item errorFields =
+    let
+        inputClasses : String
+        inputClasses =
+            "shadow appearance-none border rounded w-full py-2 px-3 text-grey-darker leading-tight focus:outline-none focus:shadow-outline"
+
+        addBorderIfError : String -> String
+        addBorderIfError field =
+            inputClasses
+                ++ (if List.member field errorFields then
+                        "border border-red"
+
+                    else
+                        ""
+                   )
+    in
     div [ class "w-full max-w-xs" ]
         [ form
             [ class "bg-white shadow-md px-8 pt-6 pb-6 mb-4"
@@ -122,11 +176,26 @@ viewAddItem item =
                     ]
                     [ text "Name" ]
                 , input
-                    [ class "shadow appearance-none border rounded w-full py-2 px-3 text-grey-darker leading-tight focus:outline-none focus:shadow-outline"
+                    [ class <| addBorderIfError "name"
                     , Attr.id "name"
                     , Attr.type_ "text"
                     , Attr.placeholder "My gear item"
                     , onInput (\name -> ChangeItem { item | name = name })
+                    ]
+                    [ text item.name ]
+                ]
+            , div [ class "mb-4" ]
+                [ label
+                    [ class "block text-grey-darker text-sm font-bold mb-2"
+                    , Attr.for "owner"
+                    ]
+                    [ text "Owner" ]
+                , input
+                    [ class <| addBorderIfError "owner"
+                    , Attr.id "owner"
+                    , Attr.type_ "text"
+                    , Attr.placeholder "Rick Astley"
+                    , onInput (\owner -> ChangeItem { item | owner = owner })
                     ]
                     [ text item.name ]
                 ]
@@ -137,7 +206,7 @@ viewAddItem item =
                     ]
                     [ text "Description" ]
                 , textarea
-                    [ class "shadow appearance-none border rounded w-full py-2 px-3 text-grey-darker leading-tight focus:outline-none focus:shadow-outline"
+                    [ class <| addBorderIfError "description"
                     , Attr.id "description"
                     , Attr.placeholder "Item description..."
                     , onInput (\desc -> ChangeItem { item | description = desc })
@@ -156,22 +225,6 @@ viewAddItem item =
         ]
 
 
-inputDescription : ItemNoId -> Html Msg
-inputDescription item =
-    div
-        [ class "flex items-end py-2" ]
-        [ label [ class "mr-3" ] [ text "Level" ]
-        , div [ class "" ]
-            [ h3 [ class "bold text-2xl" ] [ text "Description" ]
-            , textarea [] [ text item.description ]
-            ]
-        ]
-
-
-listBtn : Html Msg
-listBtn =
-    a
-        [ class "btn regular"
-        , Attr.href itemsPath
-        ]
-        [ i [ class "fa fa-chevron-left mr-1" ] [], text "List" ]
+viewSuccess : Model -> Html Msg
+viewSuccess model =
+    div [] []
