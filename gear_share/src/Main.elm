@@ -1,240 +1,335 @@
-module Main exposing (init, main, subscriptions)
+module Main exposing (main)
 
-import Browser exposing (UrlRequest)
-import Browser.Navigation as Nav exposing (Key)
-import Html exposing (Html, a, div, section, span, text)
-import Html.Attributes exposing (class, href)
-import Pages.Add as Add
-import Pages.Edit as Edit
-import Pages.List as List
-import Routes exposing (Route)
-import Shared exposing (..)
+import Api exposing (Cred)
+import Article.Slug exposing (Slug)
+import Avatar exposing (Avatar)
+import Browser exposing (Document)
+import Browser.Navigation as Nav
+import Html exposing (..)
+import Json.Decode as Decode exposing (Value)
+import Page exposing (Page)
+import Page.Article as Article
+import Page.Article.Editor as Editor
+import Page.Blank as Blank
+import Page.Home as Home
+import Page.Login as Login
+import Page.NotFound as NotFound
+import Page.Profile as Profile
+import Page.Register as Register
+import Page.Settings as Settings
+import Route exposing (Route)
+import Session exposing (Session)
+import Task
+import Time
 import Url exposing (Url)
+import Username exposing (Username)
+import Viewer exposing (Viewer)
 
 
-type alias Model =
-    { flags : Flags
-    , navKey : Key
-    , route : Route
-    , page : Page
-    }
+
+-- NOTE: Based on discussions around how asset management features
+-- like code splitting and lazy loading have been shaping up, it's possible
+-- that most of this file may become unnecessary in a future release of Elm.
+-- Avoid putting things in this module unless there is no alternative!
+-- See https://discourse.elm-lang.org/t/elm-spa-in-0-19/1800/2 for more.
 
 
-type Page
-    = PageNone
-    | PageList List.Model
-    | PageEdit Edit.Model
-    | PageAdd Add.Model
+type Model
+    = Redirect Session
+    | NotFound Session
+    | Home Home.Model
+    | Settings Settings.Model
+    | Login Login.Model
+    | Register Register.Model
+    | Profile Username Profile.Model
+    | Article Article.Model
+    | Editor (Maybe Slug) Editor.Model
+
+
+
+-- MODEL
+
+
+init : Maybe Viewer -> Url -> Nav.Key -> ( Model, Cmd Msg )
+init maybeViewer url navKey =
+    changeRouteTo (Route.fromUrl url)
+        (Redirect (Session.fromViewer navKey maybeViewer))
+
+
+
+-- VIEW
+
+
+view : Model -> Document Msg
+view model =
+    let
+        viewer =
+            Session.viewer (toSession model)
+
+        viewPage page toMsg config =
+            let
+                { title, body } =
+                    Page.view viewer page config
+            in
+            { title = title
+            , body = List.map (Html.map toMsg) body
+            }
+    in
+    case model of
+        Redirect _ ->
+            Page.view viewer Page.Other Blank.view
+
+        NotFound _ ->
+            Page.view viewer Page.Other NotFound.view
+
+        Settings settings ->
+            viewPage Page.Other GotSettingsMsg (Settings.view settings)
+
+        Home home ->
+            viewPage Page.Home GotHomeMsg (Home.view home)
+
+        Login login ->
+            viewPage Page.Other GotLoginMsg (Login.view login)
+
+        Register register ->
+            viewPage Page.Other GotRegisterMsg (Register.view register)
+
+        Profile username profile ->
+            viewPage (Page.Profile username) GotProfileMsg (Profile.view profile)
+
+        Article article ->
+            viewPage Page.Other GotArticleMsg (Article.view article)
+
+        Editor Nothing editor ->
+            viewPage Page.NewArticle GotEditorMsg (Editor.view editor)
+
+        Editor (Just _) editor ->
+            viewPage Page.Other GotEditorMsg (Editor.view editor)
+
+
+
+-- UPDATE
 
 
 type Msg
-    = OnUrlChange Url
-    | OnUrlRequest UrlRequest
-    | ListMsg List.Msg
-    | EditMsg Edit.Msg
-    | AddMsg Add.Msg
+    = ChangedRoute (Maybe Route)
+    | ChangedUrl Url
+    | ClickedLink Browser.UrlRequest
+    | GotHomeMsg Home.Msg
+    | GotSettingsMsg Settings.Msg
+    | GotLoginMsg Login.Msg
+    | GotRegisterMsg Register.Msg
+    | GotProfileMsg Profile.Msg
+    | GotArticleMsg Article.Msg
+    | GotEditorMsg Editor.Msg
+    | GotSession Session
 
 
-init : Flags -> Url -> Key -> ( Model, Cmd Msg )
-init flags url navKey =
-    loadCurrentPage
-        ( { flags = flags
-          , navKey = navKey
-          , route = Routes.parseUrl url
-          , page = PageNone
-          }
-        , Cmd.none
-        )
+toSession : Model -> Session
+toSession page =
+    case page of
+        Redirect session ->
+            session
+
+        NotFound session ->
+            session
+
+        Home home ->
+            Home.toSession home
+
+        Settings settings ->
+            Settings.toSession settings
+
+        Login login ->
+            Login.toSession login
+
+        Register register ->
+            Register.toSession register
+
+        Profile _ profile ->
+            Profile.toSession profile
+
+        Article article ->
+            Article.toSession article
+
+        Editor _ editor ->
+            Editor.toSession editor
 
 
-loadCurrentPage : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-loadCurrentPage ( model, cmd ) =
+changeRouteTo : Maybe Route -> Model -> ( Model, Cmd Msg )
+changeRouteTo maybeRoute model =
     let
-        ( page, newCmd ) =
-            case model.route of
-                Routes.ItemsRoute ->
-                    let
-                        ( pageModel, pageCmd ) =
-                            List.init model.flags
-                    in
-                    ( PageList pageModel, Cmd.map ListMsg pageCmd )
-
-                Routes.ItemRoute itemId ->
-                    let
-                        ( pageModel, pageCmd ) =
-                            Edit.init model.flags itemId
-                    in
-                    ( PageEdit pageModel, Cmd.map EditMsg pageCmd )
-
-                Routes.AddRoute ->
-                    let
-                        ( pageModel, pageCmd ) =
-                            Add.init model.flags
-                    in
-                    ( PageAdd pageModel, Cmd.map AddMsg pageCmd )
-
-                Routes.NotFoundRoute ->
-                    ( PageNone, Cmd.none )
+        session =
+            toSession model
     in
-    ( { model | page = page }, Cmd.batch [ cmd, newCmd ] )
+    case maybeRoute of
+        Nothing ->
+            ( NotFound session, Cmd.none )
 
+        Just Route.Root ->
+            ( model, Route.replaceUrl (Session.navKey session) Route.Home )
 
-subscriptions : Model -> Sub Msg
-subscriptions model =
-    case model.page of
-        PageList pageModel ->
-            Sub.map ListMsg (List.subscriptions pageModel)
+        Just Route.Logout ->
+            ( model, Api.logout )
 
-        PageEdit pageModel ->
-            Sub.map EditMsg (Edit.subscriptions pageModel)
+        Just Route.NewArticle ->
+            Editor.initNew session
+                |> updateWith (Editor Nothing) GotEditorMsg model
 
-        PageAdd pageModel ->
-            Sub.map AddMsg (Add.subscriptions pageModel)
+        Just (Route.EditArticle slug) ->
+            Editor.initEdit session slug
+                |> updateWith (Editor (Just slug)) GotEditorMsg model
 
-        PageNone ->
-            Sub.none
+        Just Route.Settings ->
+            Settings.init session
+                |> updateWith Settings GotSettingsMsg model
+
+        Just Route.Home ->
+            Home.init session
+                |> updateWith Home GotHomeMsg model
+
+        Just Route.Login ->
+            Login.init session
+                |> updateWith Login GotLoginMsg model
+
+        Just Route.Register ->
+            Register.init session
+                |> updateWith Register GotRegisterMsg model
+
+        Just (Route.Profile username) ->
+            Profile.init session username
+                |> updateWith (Profile username) GotProfileMsg model
+
+        Just (Route.Article slug) ->
+            Article.init session slug
+                |> updateWith Article GotArticleMsg model
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case ( msg, model.page ) of
-        ( OnUrlRequest urlRequest, _ ) ->
+    case ( msg, model ) of
+        ( ClickedLink urlRequest, _ ) ->
             case urlRequest of
                 Browser.Internal url ->
+                    case url.fragment of
+                        Nothing ->
+                            -- If we got a link that didn't include a fragment,
+                            -- it's from one of those (href "") attributes that
+                            -- we have to include to make the RealWorld CSS work.
+                            --
+                            -- In an application doing path routing instead of
+                            -- fragment-based routing, this entire
+                            -- `case url.fragment of` expression this comment
+                            -- is inside would be unnecessary.
+                            ( model, Cmd.none )
+
+                        Just _ ->
+                            ( model
+                            , Nav.pushUrl (Session.navKey (toSession model)) (Url.toString url)
+                            )
+
+                Browser.External href ->
                     ( model
-                    , Nav.pushUrl model.navKey (Url.toString url)
+                    , Nav.load href
                     )
 
-                Browser.External url ->
-                    ( model
-                    , Nav.load url
-                    )
+        ( ChangedUrl url, _ ) ->
+            changeRouteTo (Route.fromUrl url) model
 
-        ( OnUrlChange url, _ ) ->
-            let
-                newRoute =
-                    Routes.parseUrl url
-            in
-            ( { model | route = newRoute }, Cmd.none )
-                |> loadCurrentPage
+        ( ChangedRoute route, _ ) ->
+            changeRouteTo route model
 
-        ( ListMsg subMsg, PageList pageModel ) ->
-            let
-                ( newPageModel, newCmd ) =
-                    List.update subMsg pageModel
-            in
-            ( { model | page = PageList newPageModel }
-            , Cmd.map ListMsg newCmd
+        ( GotSettingsMsg subMsg, Settings settings ) ->
+            Settings.update subMsg settings
+                |> updateWith Settings GotSettingsMsg model
+
+        ( GotLoginMsg subMsg, Login login ) ->
+            Login.update subMsg login
+                |> updateWith Login GotLoginMsg model
+
+        ( GotRegisterMsg subMsg, Register register ) ->
+            Register.update subMsg register
+                |> updateWith Register GotRegisterMsg model
+
+        ( GotHomeMsg subMsg, Home home ) ->
+            Home.update subMsg home
+                |> updateWith Home GotHomeMsg model
+
+        ( GotProfileMsg subMsg, Profile username profile ) ->
+            Profile.update subMsg profile
+                |> updateWith (Profile username) GotProfileMsg model
+
+        ( GotArticleMsg subMsg, Article article ) ->
+            Article.update subMsg article
+                |> updateWith Article GotArticleMsg model
+
+        ( GotEditorMsg subMsg, Editor slug editor ) ->
+            Editor.update subMsg editor
+                |> updateWith (Editor slug) GotEditorMsg model
+
+        ( GotSession session, Redirect _ ) ->
+            ( Redirect session
+            , Route.replaceUrl (Session.navKey session) Route.Home
             )
 
-        ( ListMsg subMsg, _ ) ->
-            ( model, Cmd.none )
-
-        ( EditMsg subMsg, PageEdit pageModel ) ->
-            let
-                ( newPageModel, newCmd ) =
-                    Edit.update model.flags subMsg pageModel
-            in
-            ( { model | page = PageEdit newPageModel }
-            , Cmd.map EditMsg newCmd
-            )
-
-        ( EditMsg subMsg, _ ) ->
-            ( model, Cmd.none )
-
-        ( AddMsg subMsg, PageAdd pageModel ) ->
-            let
-                ( newPageModel, newCmd ) =
-                    Add.update model.flags subMsg pageModel
-            in
-            ( { model | page = PageAdd newPageModel }
-            , Cmd.map AddMsg newCmd
-            )
-
-        ( AddMsg subMsg, _ ) ->
+        ( _, _ ) ->
+            -- Disregard messages that arrived for the wrong page.
             ( model, Cmd.none )
 
 
-main : Program Flags Model Msg
+updateWith : (subModel -> Model) -> (subMsg -> Msg) -> Model -> ( subModel, Cmd subMsg ) -> ( Model, Cmd Msg )
+updateWith toModel toMsg model ( subModel, subCmd ) =
+    ( toModel subModel
+    , Cmd.map toMsg subCmd
+    )
+
+
+
+-- SUBSCRIPTIONS
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    case model of
+        NotFound _ ->
+            Sub.none
+
+        Redirect _ ->
+            Session.changes GotSession (Session.navKey (toSession model))
+
+        Settings settings ->
+            Sub.map GotSettingsMsg (Settings.subscriptions settings)
+
+        Home home ->
+            Sub.map GotHomeMsg (Home.subscriptions home)
+
+        Login login ->
+            Sub.map GotLoginMsg (Login.subscriptions login)
+
+        Register register ->
+            Sub.map GotRegisterMsg (Register.subscriptions register)
+
+        Profile _ profile ->
+            Sub.map GotProfileMsg (Profile.subscriptions profile)
+
+        Article article ->
+            Sub.map GotArticleMsg (Article.subscriptions article)
+
+        Editor _ editor ->
+            Sub.map GotEditorMsg (Editor.subscriptions editor)
+
+
+
+-- MAIN
+
+
+main : Program Value Model Msg
 main =
-    Browser.application
+    Api.application Viewer.decoder
         { init = init
-        , view = view
-        , update = update
+        , onUrlChange = ChangedUrl
+        , onUrlRequest = ClickedLink
         , subscriptions = subscriptions
-        , onUrlRequest = OnUrlRequest
-        , onUrlChange = OnUrlChange
+        , update = update
+        , view = view
         }
-
-
-
--- VIEWS
-
-
-view : Model -> Browser.Document Msg
-view model =
-    { title = "Gear share"
-    , body = [ currentPage model ]
-    }
-
-
-currentPage : Model -> Html Msg
-currentPage model =
-    let
-        page =
-            case model.page of
-                PageList pageModel ->
-                    List.view pageModel
-                        |> Html.map ListMsg
-
-                PageEdit pageModel ->
-                    Edit.view pageModel
-                        |> Html.map EditMsg
-
-                PageAdd pageModel ->
-                    Add.view pageModel
-                        |> Html.map AddMsg
-
-                PageNone ->
-                    viewNotFound
-    in
-    section []
-        [ viewNav model
-        , page
-        ]
-
-
-viewNav : Model -> Html Msg
-viewNav model =
-    let
-        links : List (Html Msg)
-        links =
-            case model.route of
-                Routes.ItemsRoute ->
-                    [ span [ class "font-bold text-white m-2" ] [ text "Items" ], addLink ]
-
-                Routes.ItemRoute _ ->
-                    [ linkToList, addLink ]
-
-                Routes.AddRoute ->
-                    [ linkToList ]
-
-                Routes.NotFoundRoute ->
-                    [ linkToList, addLink ]
-
-        linkToList : Html Msg
-        linkToList =
-            a [ href Routes.itemsPath, class "text-white m-2" ] [ text "List" ]
-
-        addLink : Html Msg
-        addLink =
-            a [ href Routes.addPath, class "text-white m-2" ] [ text "Add" ]
-    in
-    div
-        [ class "mb-2 text-white bg-black p-4" ]
-        links
-
-
-viewNotFound : Html Msg
-viewNotFound =
-    div [] [ text "Not found" ]
