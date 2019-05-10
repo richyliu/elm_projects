@@ -38,7 +38,7 @@ const checkJwt = jwt({
 app.use(checkJwt);
 app.use((err, req, res, next) => {
   if (err.name === 'UnauthorizedError')
-    res.status(err.status).send({ message: err.message });
+    res.status(err.status).send({ msg: 'UnauthorizedError: ' + err.message });
   else next();
 });
 

@@ -1,5 +1,6 @@
 module Route exposing (Route(..), fromUrl, href, replaceUrl)
 
+import Api exposing (Cred)
 import Browser.Navigation as Nav
 import Html exposing (Attribute)
 import Html.Attributes as Attr
@@ -14,12 +15,14 @@ import Url.Parser as Parser exposing ((</>), Parser, oneOf, s, string)
 type Route
     = Home
     | Root
+    | Login (Maybe Cred)
 
 
 parser : Parser (Route -> a) a
 parser =
     oneOf
         [ Parser.map Home Parser.top
+        , Parser.map (Login Nothing) (s "login")
         ]
 
 
@@ -39,11 +42,55 @@ replaceUrl key route =
 
 fromUrl : Url -> Maybe Route
 fromUrl url =
-    -- The RealWorld spec treats the fragment like a path.
-    -- This makes it *literally* the path, so we can proceed
-    -- with parsing as if it had been a normal path all along.
-    { url | path = Maybe.withDefault "" url.fragment, fragment = Nothing }
-        |> Parser.parse parser
+    let
+        accessToken =
+            case url.fragment of
+                Just hash ->
+                    parseToken hash
+
+                Nothing ->
+                    ""
+
+        parsed =
+            Parser.parse parser url
+    in
+    Maybe.andThen
+        (\p ->
+            case p of
+                Login _ ->
+                    if String.length accessToken > 0 then
+                        -- TODO: get username from the token
+                        Just <| Login <| Just <| Api.Cred "defualt_username" accessToken
+
+                    else
+                        Just <| Login Nothing
+
+                a ->
+                    Just a
+        )
+        parsed
+
+
+{-| Parse the access token from a hash
+-}
+parseToken : String -> String
+parseToken hash =
+    let
+        accToken =
+            "access_token="
+
+        accessToken =
+            hash
+                |> String.indices "&"
+                |> List.head
+                |> Maybe.andThen (\i -> Just <| String.slice (String.length accToken) i hash)
+    in
+    case accessToken of
+        Just token ->
+            token
+
+        Nothing ->
+            ""
 
 
 
@@ -60,5 +107,8 @@ routeToString page =
 
                 Root ->
                     []
+
+                Login _ ->
+                    [ "login" ]
     in
-    "#/" ++ String.join "/" pieces
+    "/" ++ String.join "/" pieces

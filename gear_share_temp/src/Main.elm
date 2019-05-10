@@ -1,29 +1,36 @@
 module Main exposing (main)
 
+import Api
 import Browser exposing (Document)
 import Browser.Navigation as Nav
 import Html
 import Json.Decode as Decode exposing (Value)
 import Pages.Blank as Blank
 import Pages.Home as Home
+import Pages.Login as Login
 import Route exposing (Route)
-import Session exposing (Session, newGuest)
+import Session exposing (Session)
 import Url exposing (Url)
+import Viewer exposing (Viewer)
+import WrappedPage exposing (Page)
 
 
 type Model
     = Redirect Session
     | NotFound Session
     | Home Home.Model
+    | Login Login.Model
 
 
 
 -- MODEL
 
 
-init : String -> Url -> Nav.Key -> ( Model, Cmd Msg )
-init _ url navKey =
-    changeRouteTo (Route.fromUrl url) (Redirect <| newGuest navKey)
+init : Maybe Viewer -> Url -> Nav.Key -> ( Model, Cmd Msg )
+init maybeViewer url navKey =
+    changeRouteTo
+        (Route.fromUrl url)
+        (Redirect <| Session.fromViewer navKey maybeViewer)
 
 
 
@@ -33,10 +40,13 @@ init _ url navKey =
 view : Model -> Document Msg
 view model =
     let
-        viewPage pageView page toMsg =
+        viewer =
+            Session.viewer (toSession model)
+
+        viewPage page toMsg config =
             let
                 { title, body } =
-                    pageView page
+                    WrappedPage.view viewer page config
             in
             { title = title
             , body = List.map (Html.map toMsg) body
@@ -44,10 +54,13 @@ view model =
     in
     case model of
         Home home ->
-            viewPage Home.view home GotHomeMsg
+            viewPage WrappedPage.Home GotHomeMsg (Home.view home)
+
+        Login login ->
+            viewPage WrappedPage.Other GotLoginMsg (Login.view login)
 
         _ ->
-            Blank.view
+            viewPage WrappedPage.Other (\_ -> NoOp) Blank.view
 
 
 
@@ -59,6 +72,9 @@ type Msg
     | ChangedUrl Url
     | ClickedLink Browser.UrlRequest
     | GotHomeMsg Home.Msg
+    | GotLoginMsg Login.Msg
+    | GotSession Session
+    | NoOp
 
 
 toSession : Model -> Session
@@ -72,6 +88,9 @@ toSession page =
 
         Home home ->
             Home.toSession home
+
+        Login login ->
+            Login.toSession login
 
 
 changeRouteTo : Maybe Route -> Model -> ( Model, Cmd Msg )
@@ -91,6 +110,10 @@ changeRouteTo maybeRoute model =
             Home.init session
                 |> updateWith Home GotHomeMsg model
 
+        Just (Route.Login maybeCred) ->
+            Login.init session maybeCred
+                |> updateWith Login GotLoginMsg model
+
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -98,22 +121,9 @@ update msg model =
         ( ClickedLink urlRequest, _ ) ->
             case urlRequest of
                 Browser.Internal url ->
-                    case url.fragment of
-                        Nothing ->
-                            -- If we got a link that didn't include a fragment,
-                            -- it's from one of those (href "") attributes that
-                            -- we have to include to make the RealWorld CSS work.
-                            --
-                            -- In an application doing path routing instead of
-                            -- fragment-based routing, this entire
-                            -- `case url.fragment of` expression this comment
-                            -- is inside would be unnecessary.
-                            ( model, Cmd.none )
-
-                        Just _ ->
-                            ( model
-                            , Nav.pushUrl (Session.navKey (toSession model)) (Url.toString url)
-                            )
+                    ( model
+                    , Nav.pushUrl (Session.navKey (toSession model)) (Url.toString url)
+                    )
 
                 Browser.External href ->
                     ( model
@@ -129,6 +139,15 @@ update msg model =
         ( GotHomeMsg subMsg, Home home ) ->
             Home.update subMsg home
                 |> updateWith Home GotHomeMsg model
+
+        ( GotLoginMsg subMsg, Login login ) ->
+            Login.update subMsg login
+                |> updateWith Login GotLoginMsg model
+
+        ( GotSession session, Redirect _ ) ->
+            ( Redirect session
+            , Route.replaceUrl (Session.navKey session) Route.Home
+            )
 
         ( _, _ ) ->
             -- Disregard messages that arrived for the wrong page.
@@ -149,23 +168,26 @@ updateWith toModel toMsg model ( subModel, subCmd ) =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     case model of
-        Redirect _ ->
-            Sub.none
-
         NotFound _ ->
             Sub.none
 
+        Redirect _ ->
+            Session.changes GotSession (Session.navKey (toSession model))
+
         Home home ->
             Sub.map GotHomeMsg (Home.subscriptions home)
+
+        Login login ->
+            Sub.map GotLoginMsg (Login.subscriptions login)
 
 
 
 -- MAIN
 
 
-main : Program String Model Msg
+main : Program Value Model Msg
 main =
-    Browser.application
+    Api.application Viewer.decoder
         { init = init
         , onUrlChange = ChangedUrl
         , onUrlRequest = ClickedLink

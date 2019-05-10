@@ -1,7 +1,10 @@
 module Pages.Home exposing (Model, Msg, init, subscriptions, toSession, update, view)
 
+import Api
 import Browser exposing (Document)
+import Endpoint
 import Html exposing (Html, div, text)
+import Html.Attributes as Attr
 import Http
 import Session exposing (Session)
 
@@ -27,14 +30,27 @@ init session =
     ( { session = session
       , data = Loading
       }
-    , fetchData ""
+    , fetchData session
     )
 
 
-view : Model -> Document Msg
+view : Model -> { title : String, content : Html Msg }
 view model =
     { title = "Home"
-    , body = [ div [] [ text "hello world" ] ]
+    , content =
+        Html.pre [ Attr.style "margin" "10px" ]
+            [ text
+                (case model.data of
+                    Loading ->
+                        "loading..."
+
+                    Loaded data ->
+                        "data: " ++ data
+
+                    Failed ->
+                        "(home) failed to load data"
+                )
+            ]
     }
 
 
@@ -64,12 +80,12 @@ update msg model =
 -- HTTP
 
 
-fetchData : String -> Cmd Msg
-fetchData _ =
-    Http.get
-        { url = "https://postman-echo.com/get?foo1=bar1&foo2=bar2"
-        , expect = Http.expectString GotData
-        }
+fetchData : Session -> Cmd Msg
+fetchData session =
+    Api.get
+        Endpoint.items
+        (Session.cred session)
+        (Http.expectString GotData)
 
 
 

@@ -6,7 +6,7 @@
   "scripts": {
     "start": "concurrently --kill-others \"npm:dev-local*\"",
     "dev-local": "parcel watch ./src/index.html --no-hmr",
-    "dev-local-server": "live-server --no-browser --port=8000 --entry-file=index.html ./dist/",
+    "dev-local-server": "live-server --no-browser --port=8001 --entry-file=index.html ./dist/",
     "dev-json-server": "json-server --watch db.json --port=8111",
     "build": "rm -r ./dist/; parcel build --no-minify ./src/index.html",
     "prod": "rm -r ./dist/; parcel build --no-source-maps ./src/index.html"

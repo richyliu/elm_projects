@@ -1,11 +1,11 @@
 module Pages.Blank exposing (view)
 
 import Browser exposing (Document)
-import Html exposing (Html, text)
+import Html exposing (..)
 
 
-view : Document msg
+view : { title : String, content : Html () }
 view =
     { title = ""
-    , body = [ text "" ]
+    , content = p [] [ text "[blank page]" ]
     }
