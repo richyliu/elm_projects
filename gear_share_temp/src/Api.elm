@@ -23,7 +23,7 @@ username (Cred val _) =
 
 credHeader : Cred -> Http.Header
 credHeader (Cred _ str) =
-    Http.header "authorization" ("Token " ++ str)
+    Http.header "authorization" ("Bearer " ++ str)
 
 
 {-| It's important that this is never exposed!
@@ -58,7 +58,7 @@ port onStoreChange : (Value -> msg) -> Sub msg
 
 viewerChanges : (Maybe viewer -> msg) -> Decoder (Cred -> viewer) -> Sub msg
 viewerChanges toMsg decoder =
-    onStoreChange (\value -> toMsg (decodeFromChange decoder value))
+    onStoreChange (\value -> toMsg <| decodeFromChange decoder value)
 
 
 decodeFromChange : Decoder (Cred -> viewer) -> Value -> Maybe viewer
@@ -86,7 +86,7 @@ storeCredWith (Cred uname token) =
 
 logout : Cmd msg
 logout =
-    storeCache <| Just <| Encode.object []
+    storeCache Nothing
 
 
 
@@ -134,11 +134,6 @@ storageDecoder viewerDecoder =
 -- HTTP
 
 
-loginUrl : String
-loginUrl =
-    ""
-
-
 decoderFromCred : Decoder (Cred -> a) -> Decoder a
 decoderFromCred decoder =
     Decode.map2 (\fromCred cred -> fromCred cred)
@@ -146,22 +141,40 @@ decoderFromCred decoder =
         credDecoder
 
 
-get : Endpoint -> Maybe Cred -> Expect msg -> Cmd msg
-get url maybeCred expect =
+baseRequest :
+    { method : String
+    , url : Endpoint
+    , expect : Expect msg
+    , cred : Maybe Cred
+    , body : Http.Body
+    }
+    -> Cmd msg
+baseRequest options =
     Endpoint.request
-        { method = "GET"
-        , url = url
-        , expect = expect
+        { method = options.method
+        , url = options.url
+        , expect = options.expect
         , headers =
-            case maybeCred of
+            case options.cred of
                 Just cred ->
                     [ credHeader cred ]
 
                 Nothing ->
                     []
-        , body = Http.emptyBody
+        , body = options.body
         , timeout = Nothing
         , tracker = Nothing
+        }
+
+
+get : Endpoint -> Maybe Cred -> Expect msg -> Cmd msg
+get url maybeCred expect =
+    baseRequest
+        { method = "GET"
+        , url = url
+        , expect = expect
+        , cred = maybeCred
+        , body = Http.emptyBody
         }
 
 

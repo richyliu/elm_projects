@@ -1,4 +1,4 @@
-module Endpoint exposing (Endpoint, items, login, request, unwrap, url)
+module Endpoint exposing (Endpoint, items, loginGoogle, loginPassword, request, unwrap, url)
 
 import Http
 import Url.Builder exposing (QueryParameter)
@@ -87,11 +87,11 @@ origin =
     "http://localhost:8000"
 
 
-buildAuthUrl : String -> String
-buildAuthUrl path =
+loginGoogle : String
+loginGoogle =
     String.join ""
         [ authRoot
-        , path
+        , "/authorize"
         , "?response_type=token"
         , "&client_id=" ++ clientId
         , "&connection=" ++ connectionType
@@ -101,9 +101,17 @@ buildAuthUrl path =
         ]
 
 
-login : String
-login =
-    buildAuthUrl "/authorize"
+loginPassword : String
+loginPassword =
+    String.join ""
+        [ authRoot
+        , "/authorize"
+        , "?response_type=token"
+        , "&client_id=" ++ clientId
+        , "&connection=" ++ connectionType
+        , "&audience=" ++ audience
+        , "&redirect_uri=" ++ origin ++ "/login"
+        ]
 
 
 

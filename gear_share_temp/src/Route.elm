@@ -16,6 +16,7 @@ type Route
     = Home
     | Root
     | Login (Maybe Cred)
+    | Logout
 
 
 parser : Parser (Route -> a) a
@@ -23,6 +24,7 @@ parser =
     oneOf
         [ Parser.map Home Parser.top
         , Parser.map (Login Nothing) (s "login")
+        , Parser.map Logout (s "logout")
         ]
 
 
@@ -110,5 +112,8 @@ routeToString page =
 
                 Login _ ->
                     [ "login" ]
+
+                Logout ->
+                    [ "logout" ]
     in
     "/" ++ String.join "/" pieces

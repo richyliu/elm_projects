@@ -114,6 +114,9 @@ changeRouteTo maybeRoute model =
             Login.init session maybeCred
                 |> updateWith Login GotLoginMsg model
 
+        Just Route.Logout ->
+            ( model, Api.logout )
+
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =

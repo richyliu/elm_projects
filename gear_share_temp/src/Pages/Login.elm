@@ -2,7 +2,7 @@ module Pages.Login exposing (Model, Msg, init, subscriptions, toSession, update,
 
 import Api exposing (Cred)
 import Browser exposing (Document)
-import Endpoint exposing (login)
+import Endpoint exposing (loginGoogle, loginPassword)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
@@ -41,15 +41,9 @@ view model =
     { title = "Login"
     , content =
         div [ class "cred-page" ]
-            [ div [ class "container page" ]
-                [ div [ class "row" ]
-                    [ div [ class "col-md-6 offset-md-3 col-xs-12" ]
-                        [ h1 [ class "text-xs-center" ] [ text "Sign in" ]
-                        , a [ href login ]
-                            [ text "Sign in" ]
-                        ]
-                    ]
-                ]
+            [ h1 [ class "text-xs-center" ] [ text "Sign in" ]
+            , p [] [ a [ href loginGoogle ] [ text "Sign in with google" ] ]
+            , p [] [ a [ href loginPassword ] [ text "Sign in with email and password" ] ]
             ]
     }
 

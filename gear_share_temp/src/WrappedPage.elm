@@ -55,7 +55,7 @@ viewMenu : Page -> Maybe Viewer -> List (Html msg)
 viewMenu page maybeViewer =
     case maybeViewer of
         Just viewer ->
-            [ li [] [ a [ href "" ] [ text "Sign out" ] ]
+            [ li [] [ a [ Route.href Route.Logout ] [ text "Sign out" ] ]
             , span [] [ text <| "Username: " ++ Viewer.username viewer ]
             ]
 
