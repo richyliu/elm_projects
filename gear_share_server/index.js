@@ -65,25 +65,25 @@ db.once('open', () => {
 
   app.get('/items', (req, res) =>
     Item.find((error, items) => {
-      if (error) res.status(500).send(stringify({ error }));
-      else res.send(stringify(items));
+      if (error) res.status(500).send({ error });
+      else res.send({ items });
     })
   );
 
   app.post('/items', (req, res) => {
     const item = new Item(req.body);
     item.save((error, savedItem) => {
-      if (error) res.status(400).send(stringify({ error }));
+      if (error) res.status(400).send({ error });
       else res.send({ id: savedItem._id });
     });
   });
 
   app.get('/items/:id', (req, res) => {
     Item.findById(req.params.id, (error, item) => {
-      if (error) res.status(500).send(stringify({ error }));
+      if (error) res.status(500).send({ error });
       else {
         if (item === null) res.status(404).send({ msg: 'not found' });
-        else res.send(item);
+        else res.send({ item });
       }
     });
   });
@@ -104,12 +104,12 @@ db.once('open', () => {
   /* Uncomment for HTTPS */
   // const httpsServer = https.createServer(
   //   {
-  //     key: fs.readFileSync('sslcert/server.key', 'utf8'),
-  //     cert: fs.readFileSync('sslcert/server.crt', 'utf8'),
+  //     key: fs.readFileSync('/root/ssl/gearshare.t485.org.key', 'utf8'),
+  //     cert: fs.readFileSync('/root/ssl/gearshare.t485.org.pem', 'utf8'),
   //   },
   //   app
   // );
-  // httpsServer.listen(433);
+  // httpsServer.listen(443);
 });
 
 /****** HELPER FUNCTIONS ******/
@@ -123,8 +123,4 @@ function makeAllRequired(schemaObj) {
     };
   }
   return newObj;
-}
-
-function stringify(obj) {
-  return JSON.stringify(obj, null, 2);
 }
