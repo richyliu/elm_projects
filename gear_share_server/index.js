@@ -22,8 +22,6 @@ app.use(bodyParser.json());
 app.use(cors());
 app.use(morgan('combined'));
 
-app.get('/', (req, res) => res.send({ msg: 'hello world' }));
-
 // anything after this requires authentication
 const checkJwt = jwt({
   secret: jwksRsa.expressJwtSecret({
@@ -63,14 +61,14 @@ db.once('open', () => {
   // item constructor
   const Item = mongoose.model('Item', itemSchema);
 
-  app.get('/items', (req, res) =>
+  app.get('/api_v1/items', (req, res) =>
     Item.find((error, items) => {
       if (error) res.status(500).send({ error });
       else res.send({ items });
     })
   );
 
-  app.post('/items', (req, res) => {
+  app.post('/api_v1/items', (req, res) => {
     const item = new Item(req.body);
     item.save((error, savedItem) => {
       if (error) res.status(400).send({ error });
@@ -78,7 +76,7 @@ db.once('open', () => {
     });
   });
 
-  app.get('/items/:id', (req, res) => {
+  app.get('/api_v1/items/:id', (req, res) => {
     Item.findById(req.params.id, (error, item) => {
       if (error) res.status(500).send({ error });
       else {
@@ -88,7 +86,7 @@ db.once('open', () => {
     });
   });
 
-  app.delete('/items/:id', (req, res) => {
+  app.delete('/api_v1/items/:id', (req, res) => {
     Item.findByIdAndRemove(req.params.id, (error, item) => {
       if (error) res.status(500).send({ error });
       else {
@@ -97,6 +95,8 @@ db.once('open', () => {
       }
     });
   });
+
+  app.get('*', (req, res) => res.sendFile('./index.html'));
 
   const httpServer = http.createServer(app);
   httpServer.listen(8111);
