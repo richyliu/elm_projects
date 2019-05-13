@@ -1,4 +1,8 @@
 const express = require('express');
+const fs = require('fs');
+const http = require('http');
+const https = require('https');
+
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -12,7 +16,6 @@ mongoose.connect('mongodb://localhost:27017/default', {
 
 /****** SETUP AND MIDDLEWARE ******/
 
-const port = 8111;
 const app = express();
 app.use(helmet());
 app.use(bodyParser.json());
@@ -95,9 +98,19 @@ db.once('open', () => {
     });
   });
 
-  app.listen(port, () => console.log(`Listening on port ${port}...`));
-});
+  const httpServer = http.createServer(app);
+  httpServer.listen(8111);
 
+  /* Uncomment for HTTPS */
+  // const httpsServer = https.createServer(
+  //   {
+  //     key: fs.readFileSync('sslcert/server.key', 'utf8'),
+  //     cert: fs.readFileSync('sslcert/server.crt', 'utf8'),
+  //   },
+  //   app
+  // );
+  // httpsServer.listen(433);
+});
 
 /****** HELPER FUNCTIONS ******/
 
