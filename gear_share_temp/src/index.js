@@ -3,10 +3,9 @@ import { Elm } from './Main.elm';
 const storageKey = 'store';
 const flags = localStorage.getItem(storageKey);
 const app = Elm.Main.init({ flags: flags });
-console.log(app.ports);
 
 app.ports.storeCache.subscribe(val => {
-  console.log(val);
+  console.log('[js] storing in cache: ' + val);
   if (val === null) {
     localStorage.removeItem(storageKey);
   } else {

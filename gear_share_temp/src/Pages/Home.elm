@@ -3,9 +3,10 @@ module Pages.Home exposing (Model, Msg, init, subscriptions, toSession, update, 
 import Api
 import Browser exposing (Document)
 import Endpoint
-import Html exposing (Html, div, text)
+import Html exposing (..)
 import Html.Attributes as Attr
 import Http
+import Item exposing (Item, itemsDecoder)
 import Session exposing (Session)
 
 
@@ -15,7 +16,7 @@ import Session exposing (Session)
 
 type alias Model =
     { session : Session
-    , data : Status String
+    , items : Status (List Item)
     }
 
 
@@ -28,7 +29,7 @@ type Status a
 init : Session -> ( Model, Cmd Msg )
 init session =
     ( { session = session
-      , data = Loading
+      , items = Loading
       }
     , fetchData session
     )
@@ -38,20 +39,31 @@ view : Model -> { title : String, content : Html Msg }
 view model =
     { title = "Home"
     , content =
-        Html.pre [ Attr.style "margin" "10px" ]
-            [ text
-                (case model.data of
-                    Loading ->
-                        "loading..."
+        case model.items of
+            Loading ->
+                text "loading..."
 
-                    Loaded data ->
-                        "data: " ++ data
+            Loaded items ->
+                viewItems items
 
-                    Failed ->
-                        "(home) failed to load data"
-                )
-            ]
+            Failed ->
+                text "(home) failed to load items"
     }
+
+
+viewItems : List Item -> Html Msg
+viewItems items =
+    let
+        viewItem : Item -> Html Msg
+        viewItem item =
+            div [ Attr.style "margin" "15px" ]
+                [ h2 [] [ text item.name ]
+                , div [] [ img [ Attr.src item.img ] [] ]
+                , span [] [ text <| "Owner: " ++ item.owner ]
+                , p [] [ text item.description ]
+                ]
+    in
+    div [] <| List.map viewItem items
 
 
 
@@ -59,18 +71,18 @@ view model =
 
 
 type Msg
-    = GotData (Result Http.Error String)
+    = GotItems (Result Http.Error (List Item))
     | GotSession Session
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        GotData (Ok data) ->
-            ( { model | data = Loaded data }, Cmd.none )
+        GotItems (Ok items) ->
+            ( { model | items = Loaded items }, Cmd.none )
 
-        GotData (Err error) ->
-            ( { model | data = Failed }, Cmd.none )
+        GotItems (Err error) ->
+            ( { model | items = Failed }, Cmd.none )
 
         GotSession session ->
             ( { model | session = session }, Cmd.none )
@@ -85,7 +97,7 @@ fetchData session =
     Api.get
         Endpoint.items
         (Session.cred session)
-        (Http.expectString GotData)
+        (Http.expectJson GotItems itemsDecoder)
 
 
 

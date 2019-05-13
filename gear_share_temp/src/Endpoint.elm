@@ -108,7 +108,7 @@ loginPassword =
         , "/authorize"
         , "?response_type=token"
         , "&client_id=" ++ clientId
-        , "&connection=" ++ connectionType
+        , "&connection=Username-Password-Authentication"
         , "&audience=" ++ audience
         , "&redirect_uri=" ++ origin ++ "/login"
         ]
@@ -120,7 +120,8 @@ loginPassword =
 
 databaseRoot : String
 databaseRoot =
-    "http://localhost:8111"
+    -- "http://localhost:8111"
+    "https://gearshare.t485.org"
 
 
 items : Endpoint

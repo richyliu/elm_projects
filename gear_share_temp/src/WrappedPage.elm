@@ -45,7 +45,6 @@ viewHeader page maybeViewer =
     nav [ class "navbar navbar-light" ]
         [ ul [ class "nav navbar-nav pull-xs-right" ] <|
             [ li [] [ a [ Route.href Route.Home ] [ text "Home" ] ]
-            , li [] [ a [ Route.href <| Route.Login Nothing ] [ text "Login" ] ]
             ]
                 ++ viewMenu page maybeViewer
         ]
@@ -60,7 +59,8 @@ viewMenu page maybeViewer =
             ]
 
         Nothing ->
-            [ span [] [ text "Not logged in" ]
+            [ li [] [ a [ Route.href <| Route.Login Nothing ] [ text "Login" ] ]
+            , span [] [ text "Not logged in" ]
             ]
 
 
