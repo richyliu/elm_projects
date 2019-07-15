@@ -14,16 +14,12 @@ type alias PageContent msg =
 
 {-| Take a page's Html and frames it with a header
 -}
-view : PageContent msg -> Document msg
-view { title, content } =
-    { title = title
-    , body =
-        -- The "content" class is required (in order to hide elm debugger)
-        [ div [ class "content" ] <|
-            [ lazy viewContent content
-            ]
+view : Html msg -> Html msg
+view content =
+    -- The "content" class is required (in order to hide elm debugger)
+    div [ class "content" ] <|
+        [ lazy viewContent content
         ]
-    }
 
 
 viewContent : Html msg -> Html msg

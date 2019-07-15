@@ -38,13 +38,11 @@ view model =
         --  Renders the page based on the content, viewer, and the msg
         viewPage : (msg -> Msg) -> WrappedPage.PageContent msg -> Document Msg
         viewPage toMsg config =
-            let
-                { title, body } =
-                    WrappedPage.view config
-            in
-            { title = title
+            { title = config.title
             , body =
-                List.map (Html.map toMsg) body
+                [ Html.map toMsg <|
+                    WrappedPage.view config.content
+                ]
             }
     in
     case model of
