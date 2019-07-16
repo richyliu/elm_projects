@@ -1,4 +1,4 @@
-module WrappedPage exposing (PageContent, view, viewContent)
+module WrappedPage exposing (PageContent, view)
 
 import Browser exposing (Document)
 import Html exposing (..)
@@ -17,11 +17,14 @@ type alias PageContent msg =
 view : Html msg -> Html msg
 view content =
     -- The "content" class is required (in order to hide elm debugger)
-    div [ class "content" ] <|
-        [ lazy viewContent content
+    div [ class "content" ]
+        [ viewNavbar
+        , content
         ]
 
 
-viewContent : Html msg -> Html msg
-viewContent content =
-    div [ class "" ] [ content ]
+{-| Static navbar
+-}
+viewNavbar : Html msg
+viewNavbar =
+    div [] [ text "navbar" ]

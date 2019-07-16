@@ -17,5 +17,5 @@
 
 /* Hide the elm debugger */
 body > div:not(.content) {
-  display: none;
+  /* display: none; */
 }
