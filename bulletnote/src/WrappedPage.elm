@@ -17,7 +17,7 @@ type alias PageContent msg =
 view : Html msg -> Html msg
 view content =
     -- The "content" class is required (in order to hide elm debugger)
-    div [ class "content" ]
+    div [ class "content px-4" ]
         [ viewNavbar
         , content
         ]

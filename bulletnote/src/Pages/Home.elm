@@ -28,6 +28,14 @@ import Item
         , mapItemsNewChildren
         , mapItemsToItems
         )
+import Notif
+    exposing
+        ( Notif
+        , NotifType
+        , getDescription
+        , getNotifType
+        , makeNotification
+        )
 import Route
 import Task
 import Time exposing (Posix)
@@ -43,6 +51,7 @@ type alias Model =
     , rootItem : Item
     , showControls : Bool
     , waitingForImport : Bool
+    , notifs : List Notif
     }
 
 
@@ -60,6 +69,7 @@ init navKey =
                 ]
       , showControls = False
       , waitingForImport = False
+      , notifs = []
       }
     , Cmd.none
     )
@@ -70,10 +80,31 @@ view model =
     { title = "Home"
     , content =
         div []
-            [ viewControls model
+            [ viewNotifs model.notifs
+            , viewControls model
             , viewItem model model.rootItem
             ]
     }
+
+
+viewNotifs : List Notif -> Html Msg
+viewNotifs notifs =
+    let
+        renderNotif notif =
+            div []
+                [ p [] [ text <| getDescription notif ]
+                ]
+
+        renderedNotifs =
+            notifs
+                |> List.reverse
+                |> List.map renderNotif
+                |> div []
+    in
+    div [ class "h-16 overflow-auto" ]
+        [ h2 [ class "text-lg font-serif" ] [ text "Notifications" ]
+        , renderedNotifs
+        ]
 
 
 viewControls : Model -> Html Msg
@@ -109,8 +140,8 @@ viewItem model rootItem =
     let
         renderItem : Item -> List (Html Msg) -> Html Msg
         renderItem item children =
-            div [ class "pl-4 py-2" ] <|
-                [ div [] <|
+            div [ class "pl-4" ] <|
+                [ div [ class "py-1" ] <|
                     [ if item.editing.name then
                         input
                             [ class "p-2"
@@ -127,6 +158,7 @@ viewItem model rootItem =
                                 [ class "px-2"
                                 , Attr.type_ "datetime-local"
                                 , Attr.value time
+                                , Attr.disabled <| not item.editing.time
                                 , onInput (EditItemTime item)
                                 ]
                                 []
@@ -146,7 +178,7 @@ viewItem model rootItem =
                             else
                                 []
                            )
-                        ++ children
+                , div [] children
                 ]
 
         itemControls : Item -> List (Html Msg)
@@ -161,6 +193,18 @@ viewItem model rootItem =
 
                      else
                         "edit"
+                    )
+                ]
+            , button
+                [ class "border border-black rounded px-1 mx-1"
+                , onClick <| ToggleEditTime item
+                ]
+                [ text
+                    (if item.editing.time then
+                        "done"
+
+                     else
+                        "edit time"
                     )
                 ]
             , button
@@ -187,6 +231,7 @@ type Msg
     = EditItemName Item String
     | EditItemTime Item String
     | ToggleEditName Item
+    | ToggleEditTime Item
     | AddItem Item
     | AddItemWithTime Item Posix
     | RemoveItem Item
@@ -278,6 +323,32 @@ update msg model =
             , Cmd.none
             )
 
+        ToggleEditTime editItem ->
+            ( { model
+                | rootItem =
+                    mapItemsToItems
+                        (\item ->
+                            { item
+                                | editing =
+                                    let
+                                        itemEditing =
+                                            item.editing
+                                    in
+                                    { itemEditing
+                                        | time =
+                                            if item.id == editItem.id then
+                                                not item.editing.time
+
+                                            else
+                                                item.editing.time
+                                    }
+                            }
+                        )
+                        model.rootItem
+              }
+            , Cmd.none
+            )
+
         AddItem root ->
             ( model, Task.perform (AddItemWithTime root) Time.now )
 
@@ -330,7 +401,13 @@ update msg model =
             ( { model | showControls = not model.showControls }, Cmd.none )
 
         SaveItems ->
-            ( model, Api.saveItem model.rootItem )
+            ( { model
+                | notifs =
+                    makeNotification "Attempting to save items..." Notif.Info
+                        :: model.notifs
+              }
+            , Api.saveItem model.rootItem
+            )
 
         ImportItems ->
             ( { model | waitingForImport = True }, Api.requestImportItem )
@@ -338,10 +415,19 @@ update msg model =
         ImportItemsWithItems rootItem ->
             ( case rootItem of
                 Just item ->
-                    { model | rootItem = item }
+                    { model
+                        | notifs =
+                            makeNotification "Imported new items" Notif.Info
+                                :: model.notifs
+                        , rootItem = item
+                    }
 
                 Nothing ->
-                    model
+                    { model
+                        | notifs =
+                            makeNotification "Failed to import items" Notif.Error
+                                :: model.notifs
+                    }
             , Cmd.none
             )
 
