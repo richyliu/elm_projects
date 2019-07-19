@@ -11,10 +11,23 @@ module Pages.Home exposing
 {-| Home TODO description
 -}
 
+import Api
 import Browser.Navigation as Nav
 import Html exposing (..)
 import Html.Attributes as Attr exposing (class)
 import Html.Events exposing (onClick, onInput)
+import Item
+    exposing
+        ( Id
+        , Item
+        , ItemChildren
+        , createItem
+        , createItemWithId
+        , getId
+        , mapItems
+        , mapItemsNewChildren
+        , mapItemsToItems
+        )
 import Route
 import Task
 import Time exposing (Posix)
@@ -29,46 +42,7 @@ type alias Model =
     { navKey : Nav.Key
     , rootItem : Item
     , showControls : Bool
-    }
-
-
-type alias Item =
-    { id : Id
-    , content :
-        { name : String
-        , time : Maybe String
-        }
-    , editing :
-        { name : Bool
-        , time : Bool
-        }
-    , children : ItemChildren
-    }
-
-
-type Id
-    = Id String
-
-
-type ItemChildren
-    = ItemChildren (List Item)
-
-
-createItem : String -> List Item -> Item
-createItem name children =
-    { id = Id name
-    , content = { name = name, time = Just "2018-03-02T17:30" }
-    , editing = { name = False, time = False }
-    , children = ItemChildren children
-    }
-
-
-createItemWithId : Id -> String -> List Item -> Item
-createItemWithId id name children =
-    { id = id
-    , content = { name = name, time = Nothing }
-    , editing = { name = False, time = False }
-    , children = ItemChildren children
+    , waitingForImport : Bool
     }
 
 
@@ -85,6 +59,7 @@ init navKey =
                 , createItem "eat pie" []
                 ]
       , showControls = False
+      , waitingForImport = False
       }
     , Cmd.none
     )
@@ -118,9 +93,14 @@ viewControls model =
             ]
         , button
             [ class "border border-black rounded px-1 m-2"
-            , onClick NoOp
+            , onClick SaveItems
             ]
-            [ text "serialize" ]
+            [ text "save" ]
+        , button
+            [ class "border border-black rounded px-1 m-2"
+            , onClick ImportItems
+            ]
+            [ text "import" ]
         ]
 
 
@@ -129,7 +109,7 @@ viewItem model rootItem =
     let
         renderItem : Item -> List (Html Msg) -> Html Msg
         renderItem item children =
-            div [ class "pl-4" ] <|
+            div [ class "pl-4 py-2" ] <|
                 [ div [] <|
                     [ if item.editing.name then
                         input
@@ -144,7 +124,7 @@ viewItem model rootItem =
                     , case item.content.time of
                         Just time ->
                             input
-                                [ class "p-2"
+                                [ class "px-2"
                                 , Attr.type_ "datetime-local"
                                 , Attr.value time
                                 , onInput (EditItemTime item)
@@ -193,6 +173,7 @@ viewItem model rootItem =
                 , onClick <| RemoveItem item
                 ]
                 [ text "del" ]
+            , span [ class "pl-2 font-mono" ] [ text <| "ID: " ++ getId item.id ]
             ]
     in
     mapItems renderItem rootItem
@@ -210,6 +191,9 @@ type Msg
     | AddItemWithTime Item Posix
     | RemoveItem Item
     | ToggleControls
+    | SaveItems
+    | ImportItems
+    | ImportItemsWithItems (Maybe Item)
     | NoOp
 
 
@@ -303,30 +287,23 @@ update msg model =
                     now
                         |> Time.posixToMillis
                         |> String.fromInt
-                        |> Id
 
                 newItem =
                     createItemWithId newId "Untitled" []
             in
             ( { model
                 | rootItem =
-                    mapItemsToItems
-                        (\item ->
-                            let
-                                (ItemChildren newChildren) =
-                                    item.children
-                            in
-                            { item
-                                | children =
-                                    ItemChildren <|
-                                        newChildren
-                                            ++ (if item == root then
-                                                    [ newItem ]
+                    mapItemsNewChildren
+                        (\item newChildren ->
+                            ( item
+                            , newChildren
+                                ++ (if item == root then
+                                        [ newItem ]
 
-                                                else
-                                                    []
-                                               )
-                            }
+                                    else
+                                        []
+                                   )
+                            )
                         )
                         model.rootItem
               }
@@ -336,18 +313,13 @@ update msg model =
         RemoveItem removeItem ->
             ( { model
                 | rootItem =
-                    mapItemsToItems
-                        (\item ->
-                            let
-                                (ItemChildren newChildren) =
-                                    item.children
-                            in
-                            { item
-                                | children =
-                                    ItemChildren <|
-                                        List.filter (.id >> (/=) removeItem.id)
-                                            newChildren
-                            }
+                    mapItemsNewChildren
+                        (\item newChildren ->
+                            ( item
+                            , List.filter
+                                (.id >> (/=) removeItem.id)
+                                newChildren
+                            )
                         )
                         model.rootItem
               }
@@ -357,33 +329,24 @@ update msg model =
         ToggleControls ->
             ( { model | showControls = not model.showControls }, Cmd.none )
 
+        SaveItems ->
+            ( model, Api.saveItem model.rootItem )
+
+        ImportItems ->
+            ( { model | waitingForImport = True }, Api.requestImportItem )
+
+        ImportItemsWithItems rootItem ->
+            ( case rootItem of
+                Just item ->
+                    { model | rootItem = item }
+
+                Nothing ->
+                    model
+            , Cmd.none
+            )
+
         NoOp ->
             ( model, Cmd.none )
-
-
-mapItems : (Item -> List a -> a) -> Item -> a
-mapItems mapper item =
-    let
-        (ItemChildren children) =
-            item.children
-    in
-    mapper item <| List.map (mapItems mapper) children
-
-
-mapItemsToItems : (Item -> Item) -> Item -> Item
-mapItemsToItems mapper item =
-    let
-        (ItemChildren children) =
-            item.children
-    in
-    mapper
-        { item
-            | children =
-                ItemChildren <|
-                    List.map
-                        (mapItemsToItems mapper)
-                        children
-        }
 
 
 
@@ -391,37 +354,16 @@ mapItemsToItems mapper item =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Sub.none
+subscriptions model =
+    if model.waitingForImport then
+        Api.importItem ImportItemsWithItems
+
+    else
+        Sub.none
 
 
 
 -- EXPORT
-
-
-serializeItems : Item -> String
-serializeItems rootItem =
-    let
-        a =
-            Debug.log "rootItem" rootItem
-    in
-    mapItems
-        (\item children ->
-            let
-                (Id id) =
-                    item.id
-            in
-            String.join ""
-                [ "{ id: '"
-                , id
-                , "', name: '"
-                , item.content.name
-                , "', children : ["
-                , String.join ", " children
-                , "] }"
-                ]
-        )
-        rootItem
 
 
 toNavKey : Model -> Nav.Key
