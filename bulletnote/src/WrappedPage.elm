@@ -1,4 +1,4 @@
-module WrappedPage exposing (PageContent, view, viewContent, viewHeader)
+module WrappedPage exposing (PageContent, view)
 
 import Browser exposing (Document)
 import Html exposing (..)
@@ -9,39 +9,22 @@ import Html.Lazy exposing (lazy, lazy2)
 type alias PageContent msg =
     { title : String
     , content : Html msg
-    , iconButtons : List (Html msg)
     }
 
 
 {-| Take a page's Html and frames it with a header
 -}
-view : PageContent msg -> Document msg
-view { title, content, iconButtons } =
-    { title = "MT"
-    , body =
-        [ div [ class "w-full font-sans" ] <|
-            [ lazy2 viewHeader title iconButtons
-            , lazy viewContent content
-            ]
+view : Html msg -> Html msg
+view content =
+    -- The "content" class is required (in order to hide elm debugger)
+    div [ class "content px-4" ]
+        [ viewNavbar
+        , content
         ]
-    }
 
 
-viewHeader : String -> List (Html msg) -> Html msg
-viewHeader header iconButtons =
-    div [ class "fixed bg-gray-400 top-0 w-full z-20 shadow-md pt-3 pb-1 text-center" ] <|
-        (case iconButtons of
-            [ left, right ] ->
-                [ div [ class "float-left p-2 w-0" ] [ left ]
-                , div [ class "float-right p-2 w-0 mr-6" ] [ right ]
-                ]
-
-            _ ->
-                []
-        )
-            ++ [ h1 [ class "text-xl font-bold" ] [ text header ] ]
-
-
-viewContent : Html msg -> Html msg
-viewContent content =
-    div [ class "w-full mt-12" ] [ content ]
+{-| Static navbar
+-}
+viewNavbar : Html msg
+viewNavbar =
+    div [] [ text "navbar" ]
