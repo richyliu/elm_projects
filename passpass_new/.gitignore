@@ -1,0 +1,5 @@
+elm-stuff/
+dist/
+local_dist/
+.cache/
+storage/

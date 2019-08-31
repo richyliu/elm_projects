@@ -1,0 +1,30 @@
+{
+  "name": "passpass",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "concurrently --kill-others \"npm:dev-local*\"",
+    "dev-local": "parcel watch ./src/index.html --out-dir ./local_dist/ --no-hmr",
+    "dev-local-server": "live-server --no-browser --port=8000 --entry-file=index.html ./local_dist/",
+    "dev-exposed": "live-server --no-browser --port=8001 --entry-file=index.html ./local_dist/",
+    "dev-exposed-server": "concurrently --kill-others \"npm:dev-local\" \"npm:dev-exposed\"",
+    "build": "rm -r ./dist/; parcel build --no-cache --no-minify ./src/index.html",
+    "prod": "rm -r ./dist/; parcel build --no-cache --no-source-maps ./src/index.html"
+  },
+  "keywords": [],
+  "author": "Richard Liu",
+  "license": "MIT",
+  "dependencies": {
+    "@fullhuman/postcss-purgecss": "^1.2.0",
+    "autoprefixer": "^9.6.0",
+    "live-server": "^1.2.1",
+    "parcel": "^1.12.3",
+    "postcss": "^7.0.16",
+    "tailwindcss": "^1.0.2"
+  },
+  "devDependencies": {
+    "concurrently": "^4.1.0",
+    "node-elm-compiler": "^5.0.3"
+  }
+}
